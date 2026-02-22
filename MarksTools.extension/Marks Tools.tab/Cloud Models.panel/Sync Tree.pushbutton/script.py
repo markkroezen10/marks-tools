@@ -154,7 +154,8 @@ class SyncWizard(forms.WPFWindow):
     def _start_discovery(self):
         self.pb_scan.IsIndeterminate = True
         self.lbl_scan_status.Text = "Opening linked models (detached) to discover tree…"
-        self.btn_next.IsEnabled = False        self._discovery_log = []
+        self.btn_next.IsEnabled = False
+        self._discovery_log = []
         self.tb_scan_log.Text = ""
         t = threading.Thread(target=self._discover_worker)
         t.daemon = True

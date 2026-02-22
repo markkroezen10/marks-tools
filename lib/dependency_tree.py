@@ -35,27 +35,48 @@ def get_direct_link_guids(doc):
 
     Each dict contains:
         name, project_guid, model_guid, user_path
+
+    Also returns a list of diagnostic strings for links that were skipped.
     """
     results = []
-    for lt in FilteredElementCollector(doc).OfClass(RevitLinkType).ToElements():
+    skipped = []
+    link_types = list(
+        FilteredElementCollector(doc).OfClass(RevitLinkType).ToElements()
+    )
+    if not link_types:
+        skipped.append("No RevitLinkType elements found in document.")
+        return results, skipped
+
+    for lt in link_types:
+        lt_name = "<unknown>"
+        try:
+            lt_name = lt.Name
+        except Exception:
+            pass
+
         # Skip nested (transitive) links
         try:
             if lt.IsNestedLink:
+                skipped.append("Skipped (nested): {0}".format(lt_name))
                 continue
         except Exception:
             pass
 
         try:
             efr = lt.GetExternalFileReference()
-        except Exception:
+        except Exception as ex:
+            skipped.append("Skipped (GetExternalFileReference failed): {0} — {1}".format(lt_name, ex))
             continue
         if efr is None:
+            skipped.append("Skipped (no ExternalFileReference): {0}".format(lt_name))
             continue
         if efr.ExternalFileReferenceType != ExternalFileReferenceType.RevitLink:
+            skipped.append("Skipped (not a RevitLink type): {0}".format(lt_name))
             continue
 
         model_path = efr.GetAbsolutePath()
         if model_path is None:
+            skipped.append("Skipped (null absolute path): {0}".format(lt_name))
             continue
 
         # Extract cloud GUIDs — only succeeds for cloud model paths;
@@ -64,16 +85,17 @@ def get_direct_link_guids(doc):
             pg = str(model_path.GetProjectGUID())
             mg = str(model_path.GetModelGUID())
             up = ModelPathUtils.ConvertModelPathToUserVisiblePath(model_path)
-        except Exception:
+        except Exception as ex:
+            skipped.append("Skipped (not a cloud path): {0} — {1}".format(lt_name, ex))
             continue
 
         results.append({
-            "name": lt.Name,
+            "name": lt_name,
             "project_guid": pg,
             "model_guid": mg,
             "user_path": up,
         })
-    return results
+    return results, skipped
 
 
 # ------------------------------------------------------------------
@@ -158,7 +180,7 @@ def build_dependency_tree(app, root_region, root_project_guid, root_model_guid,
             # Report skipped links via progress callback
             if skipped and progress_callback:
                 for s in skipped:
-                    progress_callback("  \u26a0 " + s)
+                    progress_callback("  ⚠ " + s)
 
             if progress_callback:
                 progress_callback(
@@ -166,11 +188,11 @@ def build_dependency_tree(app, root_region, root_project_guid, root_model_guid,
                 )
 
         except Exception as ex:
-            # Could not open this model \u2014 record it but continue BFS
+            # Could not open this model — record it but continue BFS
             model_info[mod]["error"] = str(ex)
             if progress_callback:
                 progress_callback(
-                    "  \u2717 Error scanning {0}: {1}".format(name, ex)
+                    "  ✗ Error scanning {0}: {1}".format(name, ex)
                 )
 
         for child in children:
