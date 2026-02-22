@@ -175,6 +175,7 @@ class SyncWizard(forms.WPFWindow):
                 self._root_model,
                 root_name=self._root_name,
                 progress_callback=progress_cb,
+                root_doc=revit.doc,
             )
             ordered = sync_order(adj, info)
 

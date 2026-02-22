@@ -102,7 +102,8 @@ def discover_children(app, region, project_guid, model_guid):
 # ------------------------------------------------------------------
 
 def build_dependency_tree(app, root_region, root_project_guid, root_model_guid,
-                          root_name="ROOT", progress_callback=None):
+                          root_name="ROOT", progress_callback=None,
+                          root_doc=None):
     """Walk the cloud-link tree via BFS.
 
     Parameters
@@ -115,6 +116,9 @@ def build_dependency_tree(app, root_region, root_project_guid, root_model_guid,
         Display name for the root node.
     progress_callback : callable(msg) or None
         Called with a status string whenever a model is opened / closed.
+    root_doc : Document or None
+        If the root model is already open (e.g. active document), pass it
+        here so the BFS reads links directly instead of trying to re-open it.
 
     Returns
     -------
@@ -143,7 +147,12 @@ def build_dependency_tree(app, root_region, root_project_guid, root_model_guid,
             progress_callback("Scanning: {0}".format(name))
 
         try:
-            children = discover_children(app, region, proj, mod)
+            # Use the already-open document for the root model;
+            # open-detached for every other model in the tree.
+            if root_doc and mod == root_model_guid:
+                children = get_direct_link_guids(root_doc)
+            else:
+                children = discover_children(app, region, proj, mod)
         except Exception as ex:
             # Could not open this model — record it but continue BFS
             model_info[mod]["error"] = str(ex)
