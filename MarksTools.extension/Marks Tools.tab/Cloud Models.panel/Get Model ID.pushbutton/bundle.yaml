@@ -1,0 +1,7 @@
+title: "Get Model ID"
+tooltip: >
+  Extract Project GUID, Model GUID, and Region from the active
+  ACC / BIM 360 cloud document. Copies a CSV row to the clipboard.
+author: Mark
+min_revit_version: "2024"
+highlight: new
