@@ -21,7 +21,7 @@ from Autodesk.Revit.DB import (
     ModelPathUtils,
 )
 
-from cloud_helpers import build_cloud_model_path, make_detached_open_options
+from cloud_helpers import build_cloud_model_path, make_open_options
 
 
 # ------------------------------------------------------------------
@@ -203,16 +203,19 @@ def get_direct_link_guids(doc):
 
 
 # ------------------------------------------------------------------
-# Discover children of a single cloud model (open detached → scan → close)
+# Discover children of a single cloud model (open → scan → close)
 # ------------------------------------------------------------------
 
 def discover_children(app, region, project_guid, model_guid):
-    """Open cloud model **detached** (fast), read direct links, close.
+    """Open cloud model normally (with all worksets), read direct links, close.
+
+    ACC / BIM 360 cloud models cannot be opened detached, so we open
+    them as a regular collaborative session.
 
     Returns (children_list, skipped_list).
     """
     mp = build_cloud_model_path(region, project_guid, model_guid)
-    opts = make_detached_open_options()
+    opts = make_open_options(open_all_worksets=True)
     doc = app.OpenDocumentFile(mp, opts)
     try:
         return get_direct_link_guids(doc)
@@ -387,7 +390,7 @@ def build_dependency_tree(app, root_region, root_project_guid, root_model_guid,
         children = []
         try:
             # Use the already-open document for the root model;
-            # open-detached for every other model in the tree.
+            # open normally for every other model in the tree.
             if root_doc and mod == root_model_guid:
                 children, skipped = get_direct_link_guids(root_doc)
             else:
