@@ -243,7 +243,7 @@ class SyncWizard(forms.WPFWindow):
             err = info.get(guid, {}).get("error")
             if err:
                 err_lbl = WpfTextBlock()
-                err_lbl.Text = "\u26a0 " + err[:80]
+                err_lbl.Text = "⚠ " + err[:80]
                 err_lbl.Foreground = _CLR_ERROR
                 err_lbl.FontSize = 11
                 err_lbl.Margin = Thickness(4, 0, 4, 0)

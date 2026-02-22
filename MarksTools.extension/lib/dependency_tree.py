@@ -25,14 +25,24 @@ from cloud_helpers import build_cloud_model_path, make_detached_open_options
 
 
 # ------------------------------------------------------------------
-# Read direct link GUIDs from an already-open document
+# Read direct link info from an already-open document
 # ------------------------------------------------------------------
 
-def get_direct_link_guids(doc):
-    """Return a list of dicts describing each *direct* RevitLinkType in *doc*.
+def _is_empty_guid(guid_str):
+    """Return True if the GUID string is all zeros."""
+    return guid_str.replace("-", "").replace("0", "") == ""
 
-    Nested links (``IsNestedLink == True``) are skipped so we only get the
-    immediate children of this document.
+
+def get_direct_link_guids(doc):
+    """Return a list of dicts describing each *direct* cloud link in *doc*.
+
+    Uses RevitLinkInstance.GetLinkDocument() to read cloud GUIDs from the
+    in-memory linked document itself.  This is more reliable than
+    RevitLinkType.GetExternalFileReference() for ACC models, which can
+    return empty GUIDs when the link reference is unresolved.
+
+    Falls back to ExternalFileReference for links whose document is not
+    loaded in memory.
 
     Each dict contains:
         name, project_guid, model_guid, user_path
@@ -41,61 +51,154 @@ def get_direct_link_guids(doc):
     """
     results = []
     skipped = []
+    seen_guids = set()
+
+    # --- Phase 1: collect link info from RevitLinkInstance (preferred) ---
+    instances = list(
+        FilteredElementCollector(doc).OfClass(RevitLinkInstance).ToElements()
+    )
+    instance_type_ids = set()  # track which type IDs we already handled
+
+    for inst in instances:
+        inst_name = "<unknown>"
+        try:
+            inst_name = inst.Name
+        except Exception:
+            pass
+
+        # Skip nested links
+        try:
+            lt = doc.GetElement(inst.GetTypeId())
+            if lt is not None and lt.IsNestedLink:
+                skipped.append("Skipped (nested): {0}".format(inst_name))
+                continue
+        except Exception:
+            pass
+
+        # Avoid processing same link type twice
+        try:
+            tid = inst.GetTypeId()
+            if tid in instance_type_ids:
+                continue
+            instance_type_ids.add(tid)
+        except Exception:
+            pass
+
+        linked_doc = None
+        try:
+            linked_doc = inst.GetLinkDocument()
+        except Exception as ex:
+            skipped.append("GetLinkDocument failed: {0} -- {1}".format(
+                inst_name, ex))
+
+        if linked_doc is not None:
+            try:
+                cloud_mp = linked_doc.GetCloudModelPath()
+                pg = str(cloud_mp.GetProjectGUID())
+                mg = str(cloud_mp.GetModelGUID())
+
+                if _is_empty_guid(mg):
+                    skipped.append("Skipped (empty model GUID from doc): {0}".format(
+                        inst_name))
+                    continue
+
+                if mg in seen_guids:
+                    continue
+                seen_guids.add(mg)
+
+                up = ""
+                try:
+                    up = ModelPathUtils.ConvertModelPathToUserVisiblePath(cloud_mp)
+                except Exception:
+                    pass
+
+                name = linked_doc.Title or inst_name
+                results.append({
+                    "name": name,
+                    "project_guid": pg,
+                    "model_guid": mg,
+                    "user_path": up,
+                })
+                continue  # success — skip fallback
+            except Exception as ex:
+                skipped.append(
+                    "GetCloudModelPath failed: {0} -- {1}".format(inst_name, ex))
+
+        # --- Fallback: try ExternalFileReference on the link type ---
+        try:
+            lt = doc.GetElement(inst.GetTypeId())
+            if lt is None:
+                continue
+            efr = lt.GetExternalFileReference()
+            if efr is None:
+                continue
+            if efr.ExternalFileReferenceType != ExternalFileReferenceType.RevitLink:
+                continue
+            model_path = efr.GetAbsolutePath()
+            if model_path is None:
+                continue
+            pg = str(model_path.GetProjectGUID())
+            mg = str(model_path.GetModelGUID())
+            if _is_empty_guid(mg):
+                skipped.append("Skipped (empty GUID from EFR): {0}".format(inst_name))
+                continue
+            if mg in seen_guids:
+                continue
+            seen_guids.add(mg)
+            up = ModelPathUtils.ConvertModelPathToUserVisiblePath(model_path)
+            results.append({
+                "name": lt.Name or inst_name,
+                "project_guid": pg,
+                "model_guid": mg,
+                "user_path": up,
+            })
+        except Exception as ex:
+            skipped.append("EFR fallback failed: {0} -- {1}".format(inst_name, ex))
+
+    # --- Phase 2: catch link types with no instances ---
     link_types = list(
         FilteredElementCollector(doc).OfClass(RevitLinkType).ToElements()
     )
-    if not link_types:
-        skipped.append("No RevitLinkType elements found in document.")
-        return results, skipped
-
     for lt in link_types:
         lt_name = "<unknown>"
         try:
             lt_name = lt.Name
         except Exception:
             pass
-
-        # Skip nested (transitive) links
         try:
             if lt.IsNestedLink:
-                skipped.append("Skipped (nested): {0}".format(lt_name))
                 continue
         except Exception:
             pass
-
+        if lt.Id in instance_type_ids:
+            continue  # already handled above
         try:
             efr = lt.GetExternalFileReference()
-        except Exception as ex:
-            skipped.append("Skipped (GetExternalFileReference failed): {0} — {1}".format(lt_name, ex))
-            continue
-        if efr is None:
-            skipped.append("Skipped (no ExternalFileReference): {0}".format(lt_name))
-            continue
-        if efr.ExternalFileReferenceType != ExternalFileReferenceType.RevitLink:
-            skipped.append("Skipped (not a RevitLink type): {0}".format(lt_name))
-            continue
-
-        model_path = efr.GetAbsolutePath()
-        if model_path is None:
-            skipped.append("Skipped (null absolute path): {0}".format(lt_name))
-            continue
-
-        # Extract cloud GUIDs — only succeeds for cloud model paths;
-        # file-based paths will throw and be skipped.
-        try:
+            if efr is None:
+                continue
+            if efr.ExternalFileReferenceType != ExternalFileReferenceType.RevitLink:
+                continue
+            model_path = efr.GetAbsolutePath()
+            if model_path is None:
+                continue
             pg = str(model_path.GetProjectGUID())
             mg = str(model_path.GetModelGUID())
+            if _is_empty_guid(mg) or mg in seen_guids:
+                continue
+            seen_guids.add(mg)
             up = ModelPathUtils.ConvertModelPathToUserVisiblePath(model_path)
-        except Exception as ex:
-            skipped.append("Skipped (not a cloud path): {0} — {1}".format(lt_name, ex))
-            continue
+            results.append({
+                "name": lt_name,
+                "project_guid": pg,
+                "model_guid": mg,
+                "user_path": up,
+            })
+        except Exception:
+            pass
 
-        results.append({
-            "name": lt_name,
-            "project_guid": pg,
-            "model_guid": mg,
-            "user_path": up,
-        })
+    if not results and not instances and not link_types:
+        skipped.append("No RevitLinkType or RevitLinkInstance elements found.")
+
     return results, skipped
 
 
@@ -186,7 +289,7 @@ def build_dependency_tree_from_doc(root_doc, root_region, root_project_guid,
 
                 if skipped and progress_callback:
                     for s in skipped:
-                        progress_callback("  \u26a0 " + s)
+                        progress_callback("  ⚠ " + s)
 
                 if progress_callback:
                     progress_callback(
@@ -197,12 +300,12 @@ def build_dependency_tree_from_doc(root_doc, root_region, root_project_guid,
                 model_info[mod]["error"] = str(ex)
                 if progress_callback:
                     progress_callback(
-                        "  \u2717 Error scanning {0}: {1}".format(name, ex))
+                        "  ✗ Error scanning {0}: {1}".format(name, ex))
         else:
             model_info[mod]["error"] = "Link document not loaded in memory"
             if progress_callback:
                 progress_callback(
-                    "  \u26a0 {0}: document not loaded (will still be synced)".format(name))
+                    "  ⚠ {0}: document not loaded (will still be synced)".format(name))
 
         for child in children:
             child_key = child["model_guid"]
