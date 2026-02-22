@@ -10,7 +10,6 @@ __doc__ = (
     "and sync every model bottom-up (leaves first, root last)."
 )
 __author__ = "Mark"
-__context__ = "active-doc"
 
 import os
 import threading

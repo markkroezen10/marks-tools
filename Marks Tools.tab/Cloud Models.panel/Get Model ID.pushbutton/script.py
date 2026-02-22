@@ -4,7 +4,6 @@ __title__ = "Get Model ID"
 __doc__ = "Extracts Project GUID, Model GUID, and Region from the active " \
           "ACC / BIM360 cloud document and copies a CSV row to the clipboard."
 __author__ = "Mark"
-__context__ = "active-doc"
 
 from pyrevit import revit, forms
 import System

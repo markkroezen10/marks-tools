@@ -5,5 +5,4 @@ tooltip: >
   Opens a WPF wizard for model selection, options, and live progress.
 author: Mark
 min_revit_version: "2024"
-context: active-doc
 highlight: new
