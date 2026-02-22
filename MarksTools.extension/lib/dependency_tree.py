@@ -251,12 +251,16 @@ def _get_loaded_link_docs(doc):
 
 def build_dependency_tree_from_doc(root_doc, root_region, root_project_guid,
                                    root_model_guid, root_name="ROOT",
-                                   progress_callback=None):
-    """Build the full dependency tree from the already-open root document
-    by walking in-memory linked documents (no server round-trips).
+                                   progress_callback=None, app=None):
+    """Build the full dependency tree starting from the already-open root
+    document.
 
-    This avoids opening child models from scratch, which can fail on ACC
-    when the central server cannot be reached from a cold open.
+    For the root model and any children already loaded in memory, links are
+    read directly from the in-memory document (fast, no server calls).
+
+    For children that are NOT loaded in memory, ``discover_children`` is
+    called to open the model normally, scan its links, and close it.  The
+    *app* parameter is required for this fallback to work.
     """
     adjacency = defaultdict(list)
     model_info = {}
@@ -307,17 +311,40 @@ def build_dependency_tree_from_doc(root_doc, root_region, root_project_guid,
                             len(children), name))
 
             except Exception as ex:
-                model_info[mod]["error"] = str(ex)
+                # For the root model, this is a real error.
+                # For child models, we just can't see deeper — still syncable.
+                if mod == root_model_guid:
+                    model_info[mod]["error"] = str(ex)
                 if progress_callback:
                     progress_callback(
-                        "  ✗ Error scanning {0}: {1}".format(name, ex))
+                        "  ⚠ Could not scan sub-links of {0}: {1}".format(name, ex))
         else:
-            # Document not loaded — we know it exists but cannot scan its
-            # sub-links.  Record it without an error so it still appears in
-            # the sync list (it just won't have children).
-            if progress_callback:
-                progress_callback(
-                    "  ⚠ {0}: not loaded in memory (sub-links unknown)".format(name))
+            # Document not loaded in memory — try opening it to scan
+            if app is not None:
+                if progress_callback:
+                    progress_callback(
+                        "  Opening {0} to scan sub-links...".format(name))
+                try:
+                    children, skipped = discover_children(
+                        app, region, proj, mod)
+
+                    if skipped and progress_callback:
+                        for s in skipped:
+                            progress_callback("  \u26a0 " + s)
+
+                    if progress_callback:
+                        progress_callback(
+                            "  Found {0} cloud link(s) in {1}".format(
+                                len(children), name))
+
+                except Exception as ex:
+                    if progress_callback:
+                        progress_callback(
+                            "  \u26a0 Could not open {0}: {1}".format(name, ex))
+            else:
+                if progress_callback:
+                    progress_callback(
+                        "  \u26a0 {0}: not loaded in memory (no app to open it)".format(name))
 
         for child in children:
             child_key = child["model_guid"]

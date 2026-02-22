@@ -153,7 +153,7 @@ class SyncWizard(forms.WPFWindow):
     # ── Step 2: BFS discovery (background thread) ─────────────
     def _start_discovery(self):
         self.pb_scan.IsIndeterminate = True
-        self.lbl_scan_status.Text = "Discovering linked models…"
+        self.lbl_scan_status.Text = "Opening linked models (detached) to discover tree…"
         self.btn_next.IsEnabled = False
         self._discovery_log = []
         self.tb_scan_log.Text = ""
