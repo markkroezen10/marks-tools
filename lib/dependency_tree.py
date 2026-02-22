@@ -83,7 +83,7 @@ def get_direct_link_guids(doc):
 def discover_children(app, region, project_guid, model_guid):
     """Open cloud model **detached** (fast), read direct links, close.
 
-    Returns list of child info dicts (same schema as ``get_direct_link_guids``).
+    Returns (children_list, skipped_list).
     """
     mp = build_cloud_model_path(region, project_guid, model_guid)
     opts = make_detached_open_options()
@@ -146,17 +146,32 @@ def build_dependency_tree(app, root_region, root_project_guid, root_model_guid,
         if progress_callback:
             progress_callback("Scanning: {0}".format(name))
 
+        children = []
         try:
             # Use the already-open document for the root model;
             # open-detached for every other model in the tree.
             if root_doc and mod == root_model_guid:
-                children = get_direct_link_guids(root_doc)
+                children, skipped = get_direct_link_guids(root_doc)
             else:
-                children = discover_children(app, region, proj, mod)
+                children, skipped = discover_children(app, region, proj, mod)
+
+            # Report skipped links via progress callback
+            if skipped and progress_callback:
+                for s in skipped:
+                    progress_callback("  \u26a0 " + s)
+
+            if progress_callback:
+                progress_callback(
+                    "  Found {0} cloud link(s) in {1}".format(len(children), name)
+                )
+
         except Exception as ex:
-            # Could not open this model — record it but continue BFS
+            # Could not open this model \u2014 record it but continue BFS
             model_info[mod]["error"] = str(ex)
-            children = []
+            if progress_callback:
+                progress_callback(
+                    "  \u2717 Error scanning {0}: {1}".format(name, ex)
+                )
 
         for child in children:
             child_key = child["model_guid"]

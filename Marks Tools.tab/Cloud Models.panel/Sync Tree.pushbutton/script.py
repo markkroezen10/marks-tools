@@ -57,6 +57,7 @@ class SyncWizard(forms.WPFWindow):
         self._root_project = ""
         self._root_model = ""
         self._root_name = ""
+        self._discovery_log = []          # list of status strings
 
         # Wire manual-panel toggle
         self.rb_manual.Checked  += self._toggle_manual
@@ -153,8 +154,8 @@ class SyncWizard(forms.WPFWindow):
     def _start_discovery(self):
         self.pb_scan.IsIndeterminate = True
         self.lbl_scan_status.Text = "Opening linked models (detached) to discover tree…"
-        self.btn_next.IsEnabled = False
-
+        self.btn_next.IsEnabled = False        self._discovery_log = []
+        self.tb_scan_log.Text = ""
         t = threading.Thread(target=self._discover_worker)
         t.daemon = True
         t.start()
@@ -165,7 +166,7 @@ class SyncWizard(forms.WPFWindow):
 
             def progress_cb(msg):
                 self.Dispatcher.Invoke(
-                    lambda: setattr(self.lbl_scan_status, "Text", msg)
+                    lambda m=msg: self._append_scan_log(m)
                 )
 
             adj, info = build_dependency_tree(
@@ -187,6 +188,14 @@ class SyncWizard(forms.WPFWindow):
                 lambda: self._on_discovery_error(str(ex))
             )
 
+    def _append_scan_log(self, msg):
+        """Append a line to the discovery log (runs on UI thread)."""
+        self._discovery_log.append(msg)
+        self.tb_scan_log.Text = "\n".join(self._discovery_log)
+        # Update the status label with the latest "Scanning:" message
+        if msg.startswith("Scanning:"):
+            self.lbl_scan_status.Text = msg
+
     def _on_discovery_done(self, adj, info, ordered):
         self._adjacency  = adj
         self._model_info = info
@@ -194,7 +203,17 @@ class SyncWizard(forms.WPFWindow):
 
         self.pb_scan.IsIndeterminate = False
         self.pb_scan.Value = 100
-        self.lbl_scan_status.Text = "Found {0} model(s).".format(len(ordered))
+
+        # Build summary with error count
+        err_models = [g for g in ordered if info.get(g, {}).get("error")]
+        if err_models:
+            self.lbl_scan_status.Text = "Found {0} model(s), {1} with errors.".format(
+                len(ordered), len(err_models)
+            )
+            self.lbl_scan_status.Foreground = _CLR_ERROR
+        else:
+            self.lbl_scan_status.Text = "Found {0} model(s).".format(len(ordered))
+            self.lbl_scan_status.Foreground = _CLR_SUCCESS
         self.btn_next.IsEnabled = True
 
         # Build tree UI with checkboxes
@@ -218,6 +237,16 @@ class SyncWizard(forms.WPFWindow):
             lbl.Foreground = _CLR_FG
             lbl.Margin = Thickness(4, 0, 8, 0)
             sp.Children.Add(lbl)
+
+            # Show error badge for models that failed to scan
+            err = info.get(guid, {}).get("error")
+            if err:
+                err_lbl = WpfTextBlock()
+                err_lbl.Text = "\u26a0 " + err[:80]
+                err_lbl.Foreground = _CLR_ERROR
+                err_lbl.FontSize = 11
+                err_lbl.Margin = Thickness(4, 0, 4, 0)
+                sp.Children.Add(err_lbl)
 
             guid_lbl = WpfTextBlock()
             guid_lbl.Text = guid[:13] + "…"

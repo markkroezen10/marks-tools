@@ -35,27 +35,48 @@ def get_direct_link_guids(doc):
 
     Each dict contains:
         name, project_guid, model_guid, user_path
+
+    Also returns a list of diagnostic strings for links that were skipped.
     """
     results = []
-    for lt in FilteredElementCollector(doc).OfClass(RevitLinkType).ToElements():
+    skipped = []
+    link_types = list(
+        FilteredElementCollector(doc).OfClass(RevitLinkType).ToElements()
+    )
+    if not link_types:
+        skipped.append("No RevitLinkType elements found in document.")
+        return results, skipped
+
+    for lt in link_types:
+        lt_name = "<unknown>"
+        try:
+            lt_name = lt.Name
+        except Exception:
+            pass
+
         # Skip nested (transitive) links
         try:
             if lt.IsNestedLink:
+                skipped.append("Skipped (nested): {0}".format(lt_name))
                 continue
         except Exception:
             pass
 
         try:
             efr = lt.GetExternalFileReference()
-        except Exception:
+        except Exception as ex:
+            skipped.append("Skipped (GetExternalFileReference failed): {0} — {1}".format(lt_name, ex))
             continue
         if efr is None:
+            skipped.append("Skipped (no ExternalFileReference): {0}".format(lt_name))
             continue
         if efr.ExternalFileReferenceType != ExternalFileReferenceType.RevitLink:
+            skipped.append("Skipped (not a RevitLink type): {0}".format(lt_name))
             continue
 
         model_path = efr.GetAbsolutePath()
         if model_path is None:
+            skipped.append("Skipped (null absolute path): {0}".format(lt_name))
             continue
 
         # Extract cloud GUIDs — only succeeds for cloud model paths;
@@ -64,16 +85,17 @@ def get_direct_link_guids(doc):
             pg = str(model_path.GetProjectGUID())
             mg = str(model_path.GetModelGUID())
             up = ModelPathUtils.ConvertModelPathToUserVisiblePath(model_path)
-        except Exception:
+        except Exception as ex:
+            skipped.append("Skipped (not a cloud path): {0} — {1}".format(lt_name, ex))
             continue
 
         results.append({
-            "name": lt.Name,
+            "name": lt_name,
             "project_guid": pg,
             "model_guid": mg,
             "user_path": up,
         })
-    return results
+    return results, skipped
 
 
 # ------------------------------------------------------------------
@@ -83,7 +105,7 @@ def get_direct_link_guids(doc):
 def discover_children(app, region, project_guid, model_guid):
     """Open cloud model **detached** (fast), read direct links, close.
 
-    Returns list of child info dicts (same schema as ``get_direct_link_guids``).
+    Returns (children_list, skipped_list).
     """
     mp = build_cloud_model_path(region, project_guid, model_guid)
     opts = make_detached_open_options()
@@ -146,17 +168,32 @@ def build_dependency_tree(app, root_region, root_project_guid, root_model_guid,
         if progress_callback:
             progress_callback("Scanning: {0}".format(name))
 
+        children = []
         try:
             # Use the already-open document for the root model;
             # open-detached for every other model in the tree.
             if root_doc and mod == root_model_guid:
-                children = get_direct_link_guids(root_doc)
+                children, skipped = get_direct_link_guids(root_doc)
             else:
-                children = discover_children(app, region, proj, mod)
+                children, skipped = discover_children(app, region, proj, mod)
+
+            # Report skipped links via progress callback
+            if skipped and progress_callback:
+                for s in skipped:
+                    progress_callback("  ⚠ " + s)
+
+            if progress_callback:
+                progress_callback(
+                    "  Found {0} cloud link(s) in {1}".format(len(children), name)
+                )
+
         except Exception as ex:
             # Could not open this model — record it but continue BFS
             model_info[mod]["error"] = str(ex)
-            children = []
+            if progress_callback:
+                progress_callback(
+                    "  ✗ Error scanning {0}: {1}".format(name, ex)
+                )
 
         for child in children:
             child_key = child["model_guid"]
