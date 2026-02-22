@@ -58,14 +58,8 @@ def get_direct_link_guids(doc):
         if model_path is None:
             continue
 
-        is_cloud = False
-        try:
-            is_cloud = model_path.CloudPath
-        except Exception:
-            pass
-        if not is_cloud:
-            continue
-
+        # Extract cloud GUIDs — only succeeds for cloud model paths;
+        # file-based paths will throw and be skipped.
         try:
             pg = str(model_path.GetProjectGUID())
             mg = str(model_path.GetModelGUID())
