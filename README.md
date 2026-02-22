@@ -15,7 +15,7 @@ Cloud model dependency discovery and **bottom-up sync** for ACC / BIM Collaborat
 
 ```bash
 # 1. Register the custom extension source (one-time)
-pyrevit extensions sources add MarksTools "https://raw.githubusercontent.com/CHANGEME/MarksTools/main/extensions.json"
+pyrevit extensions sources add MarksTools "https://raw.githubusercontent.com/markkroezen10/marks-tools/MarksTools/main/extensions.json"
 
 # 2. Install
 pyrevit extensions install MarksTools
@@ -24,7 +24,7 @@ pyrevit extensions install MarksTools
 Or install directly from the Git URL:
 
 ```bash
-pyrevit extensions install MarksTools --git "https://github.com/CHANGEME/MarksTools.git"
+pyrevit extensions install MarksTools --git "https://github.com/markkroezen10/marks-tools/MarksTools.git"
 ```
 
 After installing, **reload pyRevit** (pyRevit tab → Reload) or restart Revit.
@@ -41,7 +41,7 @@ After installing, **reload pyRevit** (pyRevit tab → Reload) or restart Revit.
 
 ```bash
 cd %appdata%\pyRevit\Extensions
-git clone https://github.com/CHANGEME/MarksTools.git
+git clone https://github.com/markkroezen10/marks-tools/MarksTools.git
 ```
 
 ## Requirements
