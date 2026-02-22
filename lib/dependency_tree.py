@@ -287,6 +287,13 @@ def build_dependency_tree_from_doc(root_doc, root_region, root_project_guid,
             try:
                 children, skipped = get_direct_link_guids(doc)
 
+                # Also collect loaded link docs from this child document
+                if doc != root_doc:
+                    child_link_docs = _get_loaded_link_docs(doc)
+                    for k, v in child_link_docs.items():
+                        if k not in all_link_docs:
+                            all_link_docs[k] = v
+
                 if skipped and progress_callback:
                     for s in skipped:
                         progress_callback("  ⚠ " + s)
@@ -302,10 +309,12 @@ def build_dependency_tree_from_doc(root_doc, root_region, root_project_guid,
                     progress_callback(
                         "  ✗ Error scanning {0}: {1}".format(name, ex))
         else:
-            model_info[mod]["error"] = "Link document not loaded in memory"
+            # Document not loaded — we know it exists but cannot scan its
+            # sub-links.  Record it without an error so it still appears in
+            # the sync list (it just won't have children).
             if progress_callback:
                 progress_callback(
-                    "  ⚠ {0}: document not loaded (will still be synced)".format(name))
+                    "  ⚠ {0}: not loaded in memory (sub-links unknown)".format(name))
 
         for child in children:
             child_key = child["model_guid"]
