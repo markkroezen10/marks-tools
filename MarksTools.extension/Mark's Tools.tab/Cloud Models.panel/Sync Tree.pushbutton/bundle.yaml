@@ -1,0 +1,9 @@
+title: "Sync Tree"
+tooltip: >
+  Discover the full link-dependency tree of an ACC cloud model
+  and sync every model bottom-up (leaves first, root last).
+  Opens a WPF wizard for model selection, options, and live progress.
+author: Mark
+min_revit_ver: 2024
+context: active-doc
+highlight: new

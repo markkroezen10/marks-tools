@@ -1,0 +1,14 @@
+{
+  "builtin": "false",
+  "default_enabled": "true",
+  "type": "extension",
+  "rocket_mode_compatible": "true",
+  "name": "MarksTools",
+  "description": "Cloud model dependency discovery and bottom-up sync for ACC / BIM Collaborate Pro",
+  "author": "Mark",
+  "author_profile": "https://github.com/markkroezen10/marks-tools",
+  "url": "https://github.com/markkroezen10/marks-tools/MarksTools.git",
+  "website": "https://github.com/markkroezen10/marks-tools/MarksTools",
+  "image": "",
+  "dependencies": []
+}

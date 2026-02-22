@@ -1,0 +1,168 @@
+<Window
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="Sync Tree — Mark's Tools"
+    Width="680" Height="560"
+    WindowStartupLocation="CenterScreen"
+    ResizeMode="CanResizeWithGrip"
+    Background="#FF2D2D30">
+
+    <Window.Resources>
+        <!-- Accent colours -->
+        <SolidColorBrush x:Key="AccentBrush"    Color="#FF007ACC"/>
+        <SolidColorBrush x:Key="FgBrush"        Color="#FFDCDCDC"/>
+        <SolidColorBrush x:Key="BgPanel"        Color="#FF333337"/>
+        <SolidColorBrush x:Key="BgInput"        Color="#FF3F3F46"/>
+        <SolidColorBrush x:Key="BorderBrush"    Color="#FF555555"/>
+        <SolidColorBrush x:Key="SuccessBrush"   Color="#FF4EC9B0"/>
+        <SolidColorBrush x:Key="ErrorBrush"     Color="#FFF14C4C"/>
+
+        <!-- Default text style -->
+        <Style TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource FgBrush}"/>
+            <Setter Property="FontFamily" Value="Segoe UI"/>
+            <Setter Property="FontSize"   Value="13"/>
+        </Style>
+
+        <Style TargetType="CheckBox">
+            <Setter Property="Foreground" Value="{StaticResource FgBrush}"/>
+            <Setter Property="FontFamily" Value="Segoe UI"/>
+            <Setter Property="Margin"     Value="0,3"/>
+        </Style>
+
+        <Style TargetType="TextBox">
+            <Setter Property="Background"    Value="{StaticResource BgInput}"/>
+            <Setter Property="Foreground"    Value="{StaticResource FgBrush}"/>
+            <Setter Property="BorderBrush"   Value="{StaticResource BorderBrush}"/>
+            <Setter Property="Padding"       Value="4,2"/>
+            <Setter Property="FontFamily"    Value="Segoe UI"/>
+        </Style>
+
+        <Style x:Key="NavButton" TargetType="Button">
+            <Setter Property="MinWidth"     Value="90"/>
+            <Setter Property="Height"       Value="30"/>
+            <Setter Property="Margin"       Value="6,0"/>
+            <Setter Property="Background"   Value="{StaticResource AccentBrush}"/>
+            <Setter Property="Foreground"   Value="White"/>
+            <Setter Property="BorderBrush"  Value="{StaticResource AccentBrush}"/>
+            <Setter Property="FontFamily"   Value="Segoe UI"/>
+            <Setter Property="FontWeight"   Value="SemiBold"/>
+            <Setter Property="Cursor"       Value="Hand"/>
+        </Style>
+
+        <Style x:Key="StepHeader" TargetType="TextBlock">
+            <Setter Property="FontSize"     Value="16"/>
+            <Setter Property="FontWeight"   Value="Bold"/>
+            <Setter Property="Foreground"   Value="{StaticResource AccentBrush}"/>
+            <Setter Property="Margin"       Value="0,0,0,10"/>
+        </Style>
+    </Window.Resources>
+
+    <DockPanel Margin="16">
+
+        <!-- ========== BOTTOM NAV BAR ========== -->
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal"
+                    HorizontalAlignment="Right" Margin="0,12,0,0">
+            <Button x:Name="btn_back"    Content="Back"    Style="{StaticResource NavButton}" Click="btn_back_click"    Visibility="Collapsed"/>
+            <Button x:Name="btn_next"    Content="Next"    Style="{StaticResource NavButton}" Click="btn_next_click"/>
+            <Button x:Name="btn_run"     Content="Run"     Style="{StaticResource NavButton}" Click="btn_run_click"     Visibility="Collapsed"/>
+            <Button x:Name="btn_close"   Content="Close"   Style="{StaticResource NavButton}" Click="btn_close_click"   Visibility="Collapsed"/>
+        </StackPanel>
+
+        <!-- ========== STEP PANELS ========== -->
+        <Grid>
+
+            <!-- STEP 1 — Select root model -->
+            <StackPanel x:Name="step1_panel">
+                <TextBlock Text="Step 1 — Select Root Model" Style="{StaticResource StepHeader}"/>
+
+                <RadioButton x:Name="rb_active" Content="Use the currently active document"
+                             Foreground="{StaticResource FgBrush}" IsChecked="True" Margin="0,4"
+                             GroupName="RootSource"/>
+                <RadioButton x:Name="rb_manual" Content="Enter cloud IDs manually"
+                             Foreground="{StaticResource FgBrush}" Margin="0,4"
+                             GroupName="RootSource"/>
+
+                <StackPanel x:Name="manual_panel" Margin="20,8,0,0" Visibility="Collapsed">
+                    <TextBlock Text="Region (e.g. EMEA, US):" Margin="0,2"/>
+                    <TextBox x:Name="tb_region" Width="200" HorizontalAlignment="Left"/>
+                    <TextBlock Text="Project GUID:" Margin="0,6,0,2"/>
+                    <TextBox x:Name="tb_project_guid" Width="400" HorizontalAlignment="Left"/>
+                    <TextBlock Text="Model GUID:" Margin="0,6,0,2"/>
+                    <TextBox x:Name="tb_model_guid" Width="400" HorizontalAlignment="Left"/>
+                    <TextBlock Text="Model name (optional):" Margin="0,6,0,2"/>
+                    <TextBox x:Name="tb_model_name" Width="300" HorizontalAlignment="Left"/>
+                </StackPanel>
+
+                <Border Background="{StaticResource BgPanel}" CornerRadius="4"
+                        Padding="10" Margin="0,12,0,0" x:Name="active_info_panel">
+                    <StackPanel>
+                        <TextBlock x:Name="lbl_active_title" Text="(no document)" FontWeight="SemiBold"/>
+                        <TextBlock x:Name="lbl_active_region"/>
+                        <TextBlock x:Name="lbl_active_project"/>
+                        <TextBlock x:Name="lbl_active_model"/>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+
+            <!-- STEP 2 — Dependency tree -->
+            <StackPanel x:Name="step2_panel" Visibility="Collapsed">
+                <TextBlock Text="Step 2 — Dependency Tree" Style="{StaticResource StepHeader}"/>
+                <TextBlock x:Name="lbl_scan_status" Text="Scanning linked models…" Margin="0,0,0,6"/>
+                <ProgressBar x:Name="pb_scan" Height="6" IsIndeterminate="True"
+                             Foreground="{StaticResource AccentBrush}" Background="{StaticResource BgInput}"
+                             Margin="0,0,0,10"/>
+
+                <TextBlock Text="Models to sync (leaf → root):" Margin="0,4,0,4"/>
+                <Border Background="{StaticResource BgPanel}" CornerRadius="4" Padding="6"
+                        MaxHeight="280">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel x:Name="tree_panel"/>
+                    </ScrollViewer>
+                </Border>
+            </StackPanel>
+
+            <!-- STEP 3 — Options -->
+            <StackPanel x:Name="step3_panel" Visibility="Collapsed">
+                <TextBlock Text="Step 3 — Sync Options" Style="{StaticResource StepHeader}"/>
+
+                <CheckBox x:Name="cb_open_worksets"  Content="Open closed user worksets"       IsChecked="True"/>
+                <CheckBox x:Name="cb_reload_links"   Content="Reload Revit links one-by-one"   IsChecked="True"/>
+
+                <StackPanel Orientation="Horizontal" Margin="20,4,0,4">
+                    <TextBlock Text="Link reload delay (s):" VerticalAlignment="Center"/>
+                    <TextBox x:Name="tb_link_delay" Text="2.0" Width="50" Margin="8,0,0,0"/>
+                </StackPanel>
+
+                <CheckBox x:Name="cb_reload_latest"  Content="ReloadLatest before sync"        IsChecked="True"/>
+
+                <StackPanel Orientation="Horizontal" Margin="20,4,0,4">
+                    <TextBlock Text="Pre-sync settle delay (s):" VerticalAlignment="Center"/>
+                    <TextBox x:Name="tb_sync_delay" Text="1.0" Width="50" Margin="8,0,0,0"/>
+                </StackPanel>
+
+                <CheckBox x:Name="cb_close_after"    Content="Close model after sync"           IsChecked="True"/>
+
+                <TextBlock Text="" Margin="0,14,0,4" FontStyle="Italic" Opacity="0.7"
+                           x:Name="lbl_model_count"/>
+            </StackPanel>
+
+            <!-- STEP 4 — Execution -->
+            <StackPanel x:Name="step4_panel" Visibility="Collapsed">
+                <TextBlock Text="Step 4 — Syncing" Style="{StaticResource StepHeader}"/>
+                <ProgressBar x:Name="pb_sync" Height="8" Minimum="0"
+                             Foreground="{StaticResource AccentBrush}" Background="{StaticResource BgInput}"
+                             Margin="0,0,0,8"/>
+                <TextBlock x:Name="lbl_sync_progress" Text="Preparing…"/>
+                <Border Background="{StaticResource BgPanel}" CornerRadius="4" Padding="8"
+                        Margin="0,10,0,0" MaxHeight="300">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <TextBlock x:Name="tb_log" TextWrapping="Wrap" FontFamily="Consolas"
+                                   FontSize="11.5"/>
+                    </ScrollViewer>
+                </Border>
+            </StackPanel>
+
+        </Grid>
+    </DockPanel>
+</Window>
