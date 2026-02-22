@@ -7,8 +7,8 @@
   "description": "Cloud model dependency discovery and bottom-up sync for ACC / BIM Collaborate Pro",
   "author": "Mark",
   "author_profile": "https://github.com/markkroezen10/marks-tools",
-  "url": "https://github.com/markkroezen10/marks-tools/MarksTools.git",
-  "website": "https://github.com/markkroezen10/marks-tools/MarksTools",
+  "url": "https://github.com/markkroezen10/marks-tools.git",
+  "website": "https://github.com/markkroezen10/marks-tools",
   "image": "",
   "dependencies": []
 }
