@@ -16,6 +16,7 @@ from collections import defaultdict, deque
 from Autodesk.Revit.DB import (
     FilteredElementCollector,
     RevitLinkType,
+    RevitLinkInstance,
     ExternalFileReferenceType,
     ModelPathUtils,
 )
@@ -120,7 +121,110 @@ def discover_children(app, region, project_guid, model_guid):
 
 
 # ------------------------------------------------------------------
-# BFS tree builder
+# Discover children from in-memory linked documents
+# ------------------------------------------------------------------
+
+def _get_loaded_link_docs(doc):
+    """Return a dict mapping model_guid → linked Document for every
+    RevitLinkInstance whose document is currently loaded in memory."""
+    link_docs = {}
+    for inst in FilteredElementCollector(doc).OfClass(RevitLinkInstance).ToElements():
+        try:
+            linked_doc = inst.GetLinkDocument()
+            if linked_doc is None:
+                continue
+            # Extract cloud GUIDs from the linked document
+            cloud_mp = linked_doc.GetCloudModelPath()
+            mg = str(cloud_mp.GetModelGUID())
+            if mg not in link_docs:
+                link_docs[mg] = linked_doc
+        except Exception:
+            continue
+    return link_docs
+
+
+def build_dependency_tree_from_doc(root_doc, root_region, root_project_guid,
+                                   root_model_guid, root_name="ROOT",
+                                   progress_callback=None):
+    """Build the full dependency tree from the already-open root document
+    by walking in-memory linked documents (no server round-trips).
+
+    This avoids opening child models from scratch, which can fail on ACC
+    when the central server cannot be reached from a cold open.
+    """
+    adjacency = defaultdict(list)
+    model_info = {}
+    visited = set()
+    queue = deque()
+
+    # Collect ALL loaded link documents from the root
+    all_link_docs = _get_loaded_link_docs(root_doc)
+
+    if progress_callback:
+        progress_callback("Found {0} loaded link document(s) in memory.".format(
+            len(all_link_docs)))
+
+    queue.append((root_region, root_project_guid, root_model_guid,
+                  root_name, root_doc))
+    visited.add(root_model_guid)
+
+    while queue:
+        region, proj, mod, name, doc = queue.popleft()
+        model_info[mod] = {
+            "name": name,
+            "project_guid": proj,
+            "region": region,
+        }
+
+        if progress_callback:
+            progress_callback("Scanning: {0}".format(name))
+
+        children = []
+        if doc is not None:
+            try:
+                children, skipped = get_direct_link_guids(doc)
+
+                if skipped and progress_callback:
+                    for s in skipped:
+                        progress_callback("  \u26a0 " + s)
+
+                if progress_callback:
+                    progress_callback(
+                        "  Found {0} cloud link(s) in {1}".format(
+                            len(children), name))
+
+            except Exception as ex:
+                model_info[mod]["error"] = str(ex)
+                if progress_callback:
+                    progress_callback(
+                        "  \u2717 Error scanning {0}: {1}".format(name, ex))
+        else:
+            model_info[mod]["error"] = "Link document not loaded in memory"
+            if progress_callback:
+                progress_callback(
+                    "  \u26a0 {0}: document not loaded (will still be synced)".format(name))
+
+        for child in children:
+            child_key = child["model_guid"]
+            adjacency[mod].append(child_key)
+
+            if child_key not in visited:
+                visited.add(child_key)
+                # Look up the child's in-memory document (may be None)
+                child_doc = all_link_docs.get(child_key)
+                queue.append((
+                    region,
+                    child["project_guid"],
+                    child["model_guid"],
+                    child["name"],
+                    child_doc,
+                ))
+
+    return dict(adjacency), dict(model_info)
+
+
+# ------------------------------------------------------------------
+# BFS tree builder (legacy — opens each model from scratch)
 # ------------------------------------------------------------------
 
 def build_dependency_tree(app, root_region, root_project_guid, root_model_guid,
