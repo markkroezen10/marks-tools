@@ -156,8 +156,8 @@ class SyncWizard(forms.WPFWindow):
         self.btn_next.IsEnabled = False
 
         t = threading.Thread(target=self._discover_worker)
-        t.IsBackground = True
-        t.Start()
+        t.daemon = True
+        t.start()
 
     def _discover_worker(self):
         try:
@@ -249,8 +249,8 @@ class SyncWizard(forms.WPFWindow):
         self.lbl_sync_progress.Text = "Starting…"
 
         t = threading.Thread(target=self._sync_worker, args=(selected,))
-        t.IsBackground = True
-        t.Start()
+        t.daemon = True
+        t.start()
 
     def _sync_worker(self, selected):
         app = revit.HOST_APP.app
